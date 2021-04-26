@@ -1,7 +1,9 @@
-import aiohttp
-import asyncio
 import aiofiles
 from anyio import create_task_group, run
+
+import aiohttp
+from aiohttp.client_exceptions import ClientConnectorError, ClientError, ClientResponseError
+from enum import Enum
 
 from bs4 import BeautifulSoup, element
 
@@ -15,12 +17,18 @@ from adapters import SANITIZERS
 from text_tools import split_by_words, calculate_jaundice_rate
 
 TEST_ARTICLES = (
+    'https://inosmi_broken.ru/social/20210424/249625353.html',
     'https://inosmi.ru/social/20210424/249625353.html',
     'https://inosmi.ru/social/20210425/249629422.html',
     'https://inosmi.ru/politic/20210425/249629175.html',
     'https://inosmi.ru/social/20210425/249628917.html',
     'https://inosmi.ru/politic/20210425/249628769.html',
 )
+
+
+class ProcessingStatus(Enum):
+    OK = 'OK'
+    FETCH_ERROR = 'FETCH_ERROR'
 
 
 def extract_title(html: str) -> str:
@@ -61,22 +69,29 @@ async def process_article(
 
     sanitizer_name: str = extract_sanitizer_name(url=url)
     sanitizer: function = SANITIZERS.get(sanitizer_name)
+    try:
+        html: str = await fetch(session, url)
+        article_title: str = extract_title(html)
+        sanitized_article: str = sanitizer(html, plaintext=True)
 
-    html: str = await fetch(session, url)
-    article_title = extract_title(html)
-    sanitized_article: str = sanitizer(html, plaintext=True)
-
-    article_words: List[str] = split_by_words(
-        morph=morph, text=sanitized_article)
-    yellow_rate: float = calculate_jaundice_rate(
-        article_words=article_words,
-        charged_words=charged_words)
-    words_count = len(article_words)
+        article_words: List[str] = split_by_words(
+            morph=morph, text=sanitized_article)
+        yellow_rate: float = calculate_jaundice_rate(
+            article_words=article_words,
+            charged_words=charged_words)
+        words_count = len(article_words)
+        status = ProcessingStatus.OK
+    except (ClientConnectorError, ClientError, ClientResponseError) as ex:
+        article_title: str = 'URL not exist'
+        yellow_rate = words_count = None
+        status = ProcessingStatus.FETCH_ERROR
     sites_ratings.append(
         {
+            'url': url,
             'title': article_title,
             'rate': yellow_rate,
-            'words': words_count
+            'words': words_count,
+            'status': status,
         }
     )
 
@@ -94,7 +109,14 @@ async def main():
                     morph, charged_words, url,
                     sites_ratings
                 )
-    print(sites_ratings)
+    for site in sites_ratings:
+        print(F'Url: {site["url"]}')
+        print(f'Заголовок статьи:{site["title"]}')
+        print('Рейтинг:', site['rate'])
+        print('Слов в статье:', site['words'])
+        print('Статус:', site['status'].name)
+        print()
+
 
 if __name__ == '__main__':
     run(main)
