@@ -2,6 +2,8 @@ import aiohttp
 import asyncio
 import aiofiles
 
+from bs4 import BeautifulSoup
+
 from typing import List, Tuple
 
 from urllib.parse import urlparse
@@ -10,6 +12,20 @@ from pathlib import Path
 
 from adapters import SANITIZERS
 from text_tools import split_by_words, calculate_jaundice_rate
+
+TEST_ARTICLES = (
+    'https://inosmi.ru/social/20210424/249625353.html',
+    'https://inosmi.ru/social/20210425/249629422.html',
+    'https://inosmi.ru/politic/20210425/249629175.html',
+    'https://inosmi.ru/social/20210425/249628917.html',
+    'https://inosmi.ru/politic/20210425/249628769.html',
+)
+
+
+def extract_title(html: str) -> str:
+    soup = BeautifulSoup(html, 'html.parser')
+    meta_title_tag = soup.find("meta",  {"property": "og:title"})
+    return meta_title_tag["content"]
 
 
 def extract_sanitizer_name(url: str) -> str:
@@ -34,6 +50,13 @@ async def fetch(session: aiohttp.client.ClientSession,
         return await response.text()
 
 
+async def process_article(session, morph, charged_words, url, title):
+    # TODO
+    print('Заголовок:', title)
+    print('Рейтинг:', score)
+    print('Слов в статье:', words_count)
+
+
 async def main():
     url: str = 'https://inosmi.ru/social/20210424/249625353.html'
     sanitizer_name: str = extract_sanitizer_name(url=url)
@@ -50,7 +73,9 @@ async def main():
         yellow_rate: float = calculate_jaundice_rate(
             article_words=article_words,
             charged_words=charged_words)
-
+        article_title = extract_title(html)
+        if article_title:
+            print(f'Заголовок статьи:{article_title}')
         print('Рейтинг: ', yellow_rate)
         print('Слов в статье:', len(article_words))
 
