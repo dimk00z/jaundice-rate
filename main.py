@@ -1,9 +1,11 @@
 from re import S
 import aiofiles
 from anyio import create_task_group, run
+from async_timeout import timeout
 
 import aiohttp
 from aiohttp.client_exceptions import ClientConnectorError, ClientError, ClientResponseError
+from asyncio.exceptions import TimeoutError
 from enum import Enum
 
 from bs4 import BeautifulSoup, element
@@ -27,12 +29,14 @@ TEST_ARTICLES = (
     'https://inosmi.ru/social/20210425/249628917.html',
     'https://inosmi.ru/politic/20210425/249628769.html',
 )
+TIMEOUT = 3
 
 
 class ProcessingStatus(Enum):
     OK = 'OK'
     FETCH_ERROR = 'FETCH_ERROR'
     PARSING_ERROR = 'PARSING_ERROR'
+    TIMEOUT = 'TIMEOUT'
 
 
 def extract_title(html: str) -> str:
@@ -78,24 +82,24 @@ async def process_article(
         url: str,
         sites_ratings: List[Dict]):
 
-    yellow_rate = words_count = None
+    yellow_rate = words_count = article_title = None
     try:
+        async with timeout(TIMEOUT):
+            html: str = await fetch(session, url)
 
-        html: str = await fetch(session, url)
+            article_title: str = extract_title(html)
 
-        article_title: str = extract_title(html)
+            sanitizer: function = get_sanitizer(
+                sanitizer_name=extract_sanitizer_name(url=url))
+            sanitized_article: str = sanitizer(html, plaintext=True)
 
-        sanitizer: function = get_sanitizer(
-            sanitizer_name=extract_sanitizer_name(url=url))
-        sanitized_article: str = sanitizer(html, plaintext=True)
-
-        article_words: List[str] = split_by_words(
-            morph=morph, text=sanitized_article)
-        yellow_rate: float = calculate_jaundice_rate(
-            article_words=article_words,
-            charged_words=charged_words)
-        words_count = len(article_words)
-        status = ProcessingStatus.OK
+            article_words: List[str] = split_by_words(
+                morph=morph, text=sanitized_article)
+            yellow_rate: float = calculate_jaundice_rate(
+                article_words=article_words,
+                charged_words=charged_words)
+            words_count = len(article_words)
+            status = ProcessingStatus.OK
 
     except (ClientConnectorError, ClientError, ClientResponseError) as ex:
         article_title: str = 'URL not exist'
@@ -103,6 +107,9 @@ async def process_article(
 
     except ArticleNotFound as ex:
         status = ProcessingStatus.PARSING_ERROR
+
+    except TimeoutError as ex:
+        status = ProcessingStatus.TIMEOUT
 
     sites_ratings.append(
         {
