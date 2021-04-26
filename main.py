@@ -44,14 +44,16 @@ async def load_dictionaries(path: str) -> Tuple[str]:
     return tuple(dictionary)
 
 
-async def fetch(session: aiohttp.client.ClientSession,
-                url: str) -> str:
+async def fetch(
+        session: aiohttp.client.ClientSession,
+        url: str) -> str:
     async with session.get(url) as response:
         response.raise_for_status()
         return await response.text()
 
 
-async def process_article(session, morph, charged_words, url):
+async def process_article(
+        session, morph, charged_words, url):
 
     sanitizer_name: str = extract_sanitizer_name(url=url)
     sanitizer: function = SANITIZERS.get(sanitizer_name)
@@ -66,7 +68,7 @@ async def process_article(session, morph, charged_words, url):
         article_words=article_words,
         charged_words=charged_words)
     words_count = len(article_words)
-    # TODO
+
     if article_title:
         print(f'Заголовок статьи:{article_title}')
     print('Рейтинг:', yellow_rate)
@@ -74,15 +76,15 @@ async def process_article(session, morph, charged_words, url):
 
 
 async def main():
-    url: str = 'https://inosmi.ru/social/20210424/249625353.html'
-    sanitizer_name: str = extract_sanitizer_name(url=url)
-    sanitizer: function = SANITIZERS.get(sanitizer_name)
-    charged_words = await load_dictionaries(path='charged_dict')
+    charged_words = await load_dictionaries(
+        path='charged_dict')
     morph: MorphAnalyzer = MorphAnalyzer()
-
     async with aiohttp.ClientSession() as session:
-        await process_article(session, morph, charged_words, url)
-
+        async with create_task_group() as tg:
+            for url in TEST_ARTICLES:
+                tg.start_soon(process_article, session,
+                              morph, charged_words, url)
+    print('All tasks finished!')
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    run(main)
