@@ -1,3 +1,4 @@
+from re import S
 import aiofiles
 from anyio import create_task_group, run
 
@@ -14,10 +15,12 @@ from pymorphy2 import MorphAnalyzer
 from pathlib import Path
 
 from adapters import SANITIZERS
+from adapters.exceptions import ArticleNotFound
 from text_tools import split_by_words, calculate_jaundice_rate
 
 TEST_ARTICLES = (
     'https://inosmi_broken.ru/social/20210424/249625353.html',
+    'https://lenta.ru/news/2021/04/26/zemlya/',
     'https://inosmi.ru/social/20210424/249625353.html',
     'https://inosmi.ru/social/20210425/249629422.html',
     'https://inosmi.ru/politic/20210425/249629175.html',
@@ -29,6 +32,7 @@ TEST_ARTICLES = (
 class ProcessingStatus(Enum):
     OK = 'OK'
     FETCH_ERROR = 'FETCH_ERROR'
+    PARSING_ERROR = 'PARSING_ERROR'
 
 
 def extract_title(html: str) -> str:
@@ -60,6 +64,13 @@ async def fetch(
         return await response.text()
 
 
+def get_sanitizer(sanitizer_name: str):
+    sanitizer: function = SANITIZERS.get(sanitizer_name)
+    if sanitizer is None:
+        raise ArticleNotFound(sanitizer_name)
+    return sanitizer
+
+
 async def process_article(
         session: aiohttp.client.ClientSession,
         morph: MorphAnalyzer,
@@ -67,11 +78,15 @@ async def process_article(
         url: str,
         sites_ratings: List[Dict]):
 
-    sanitizer_name: str = extract_sanitizer_name(url=url)
-    sanitizer: function = SANITIZERS.get(sanitizer_name)
+    yellow_rate = words_count = None
     try:
+
         html: str = await fetch(session, url)
+
         article_title: str = extract_title(html)
+
+        sanitizer: function = get_sanitizer(
+            sanitizer_name=extract_sanitizer_name(url=url))
         sanitized_article: str = sanitizer(html, plaintext=True)
 
         article_words: List[str] = split_by_words(
@@ -81,10 +96,14 @@ async def process_article(
             charged_words=charged_words)
         words_count = len(article_words)
         status = ProcessingStatus.OK
+
     except (ClientConnectorError, ClientError, ClientResponseError) as ex:
         article_title: str = 'URL not exist'
-        yellow_rate = words_count = None
         status = ProcessingStatus.FETCH_ERROR
+
+    except ArticleNotFound as ex:
+        status = ProcessingStatus.PARSING_ERROR
+
     sites_ratings.append(
         {
             'url': url,
@@ -94,6 +113,16 @@ async def process_article(
             'status': status,
         }
     )
+
+
+def output_sites_results(sites_ratings:  List[Dict]) -> None:
+    for site in sites_ratings:
+        print(F'Url: {site["url"]}')
+        print(f'Заголовок статьи:{site["title"]}')
+        print('Рейтинг:', site['rate'])
+        print('Слов в статье:', site['words'])
+        print('Статус:', site['status'].name)
+        print()
 
 
 async def main():
@@ -109,13 +138,7 @@ async def main():
                     morph, charged_words, url,
                     sites_ratings
                 )
-    for site in sites_ratings:
-        print(F'Url: {site["url"]}')
-        print(f'Заголовок статьи:{site["title"]}')
-        print('Рейтинг:', site['rate'])
-        print('Слов в статье:', site['words'])
-        print('Статус:', site['status'].name)
-        print()
+    output_sites_results(sites_ratings)
 
 
 if __name__ == '__main__':
