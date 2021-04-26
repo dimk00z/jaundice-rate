@@ -1,8 +1,9 @@
 import aiohttp
 import asyncio
 import aiofiles
+from anyio import create_task_group, run
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, element
 
 from typing import List, Tuple
 
@@ -23,8 +24,8 @@ TEST_ARTICLES = (
 
 
 def extract_title(html: str) -> str:
-    soup = BeautifulSoup(html, 'html.parser')
-    meta_title_tag = soup.find("meta",  {"property": "og:title"})
+    soup: BeautifulSoup = BeautifulSoup(html, 'html.parser')
+    meta_title_tag: element.Tag = soup.find("meta",  {"property": "og:title"})
     return meta_title_tag["content"]
 
 
@@ -50,10 +51,25 @@ async def fetch(session: aiohttp.client.ClientSession,
         return await response.text()
 
 
-async def process_article(session, morph, charged_words, url, title):
+async def process_article(session, morph, charged_words, url):
+
+    sanitizer_name: str = extract_sanitizer_name(url=url)
+    sanitizer: function = SANITIZERS.get(sanitizer_name)
+
+    html: str = await fetch(session, url)
+    article_title = extract_title(html)
+    sanitized_article: str = sanitizer(html, plaintext=True)
+
+    article_words: List[str] = split_by_words(
+        morph=morph, text=sanitized_article)
+    yellow_rate: float = calculate_jaundice_rate(
+        article_words=article_words,
+        charged_words=charged_words)
+    words_count = len(article_words)
     # TODO
-    print('Заголовок:', title)
-    print('Рейтинг:', score)
+    if article_title:
+        print(f'Заголовок статьи:{article_title}')
+    print('Рейтинг:', yellow_rate)
     print('Слов в статье:', words_count)
 
 
@@ -65,19 +81,7 @@ async def main():
     morph: MorphAnalyzer = MorphAnalyzer()
 
     async with aiohttp.ClientSession() as session:
-        html: str = await fetch(session, url)
-        sanitized_article: str = sanitizer(html, plaintext=True)
-
-        article_words: List[str] = split_by_words(
-            morph=morph, text=sanitized_article)
-        yellow_rate: float = calculate_jaundice_rate(
-            article_words=article_words,
-            charged_words=charged_words)
-        article_title = extract_title(html)
-        if article_title:
-            print(f'Заголовок статьи:{article_title}')
-        print('Рейтинг: ', yellow_rate)
-        print('Слов в статье:', len(article_words))
+        await process_article(session, morph, charged_words, url)
 
 
 if __name__ == '__main__':
