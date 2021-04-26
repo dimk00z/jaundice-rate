@@ -5,7 +5,7 @@ from anyio import create_task_group, run
 
 from bs4 import BeautifulSoup, element
 
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 from urllib.parse import urlparse
 from pymorphy2 import MorphAnalyzer
@@ -53,7 +53,11 @@ async def fetch(
 
 
 async def process_article(
-        session, morph, charged_words, url):
+        session: aiohttp.client.ClientSession,
+        morph: MorphAnalyzer,
+        charged_words: Tuple[str],
+        url: str,
+        sites_ratings: List[Dict]):
 
     sanitizer_name: str = extract_sanitizer_name(url=url)
     sanitizer: function = SANITIZERS.get(sanitizer_name)
@@ -68,23 +72,29 @@ async def process_article(
         article_words=article_words,
         charged_words=charged_words)
     words_count = len(article_words)
-
-    if article_title:
-        print(f'Заголовок статьи:{article_title}')
-    print('Рейтинг:', yellow_rate)
-    print('Слов в статье:', words_count)
+    sites_ratings.append(
+        {
+            'title': article_title,
+            'rate': yellow_rate,
+            'words': words_count
+        }
+    )
 
 
 async def main():
     charged_words = await load_dictionaries(
         path='charged_dict')
     morph: MorphAnalyzer = MorphAnalyzer()
+    sites_ratings: List[Dict] = []
     async with aiohttp.ClientSession() as session:
         async with create_task_group() as tg:
             for url in TEST_ARTICLES:
-                tg.start_soon(process_article, session,
-                              morph, charged_words, url)
-    print('All tasks finished!')
+                tg.start_soon(
+                    process_article, session,
+                    morph, charged_words, url,
+                    sites_ratings
+                )
+    print(sites_ratings)
 
 if __name__ == '__main__':
     run(main)
