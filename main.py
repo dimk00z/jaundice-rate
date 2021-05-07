@@ -20,6 +20,8 @@ from adapters import SANITIZERS
 from adapters.exceptions import ArticleNotFound
 from text_tools import split_by_words, calculate_jaundice_rate
 
+import logging
+
 TEST_ARTICLES = (
     'https://inosmi_broken.ru/social/20210424/249625353.html',
     'https://lenta.ru/news/2021/04/26/zemlya/',
@@ -95,6 +97,7 @@ async def process_article(
 
             article_words: List[str] = split_by_words(
                 morph=morph, text=sanitized_article)
+            
             yellow_rate: float = calculate_jaundice_rate(
                 article_words=article_words,
                 charged_words=charged_words)
@@ -149,4 +152,6 @@ async def main():
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.ERROR)
+    # logger.setLevel(logging.DEBUG)
     run(main)
