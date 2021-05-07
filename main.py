@@ -1,5 +1,4 @@
 from re import S
-import aiofiles
 from anyio import create_task_group, run
 from async_timeout import timeout
 
@@ -8,18 +7,15 @@ from aiohttp.client_exceptions import ClientConnectorError, ClientError, ClientR
 from asyncio.exceptions import TimeoutError
 from enum import Enum
 
-from bs4 import BeautifulSoup, element
-
 from typing import List, Tuple, Dict
 
-from urllib.parse import urlparse
 from pymorphy2 import MorphAnalyzer
-from pathlib import Path
 
 from adapters import SANITIZERS
 from adapters.exceptions import ArticleNotFound
 from text_tools import split_by_words, calculate_jaundice_rate
 from utils.timer import elapsed_timer
+from utils.utils import extract_sanitizer_name, load_dictionaries, extract_title
 
 import logging
 
@@ -41,28 +37,6 @@ class ProcessingStatus(Enum):
     FETCH_ERROR = 'FETCH_ERROR'
     PARSING_ERROR = 'PARSING_ERROR'
     TIMEOUT = 'TIMEOUT'
-
-
-def extract_title(html: str) -> str:
-    soup: BeautifulSoup = BeautifulSoup(html, 'html.parser')
-    meta_title_tag: element.Tag = soup.find("meta",  {"property": "og:title"})
-    if meta_title_tag:
-        return meta_title_tag["content"]
-
-
-def extract_sanitizer_name(url: str) -> str:
-    domain: str = urlparse(url).netloc
-    return '_'.join(domain.split('.'))
-
-
-async def load_dictionaries(path: str) -> Tuple[str]:
-    dictionary_directory = Path.joinpath(Path('.'), path)
-    dictionary: List[str] = []
-    for dictionary_file in dictionary_directory.iterdir():
-        async with aiofiles.open(file=dictionary_file, mode='r') as file:
-            file_content: str = await file.read()
-            dictionary.extend((file_content.strip().split('\n')))
-    return tuple(dictionary)
 
 
 async def fetch(
@@ -142,17 +116,32 @@ async def process_article(
 
 def output_sites_results(sites_ratings:  List[Dict]) -> None:
     for site in sites_ratings:
-        print(F'Url: {site["url"]}')
-        print(f'Заголовок статьи:{site["title"]}')
-        print('Рейтинг:', site['rate'])
-        print('Слов в статье:', site['words'])
-        print('Статус:', site['status'].name)
+        logging.info(F'Url: {site["url"]}')
+        logging.info(f'Заголовок статьи:{site["title"]}')
+        logging.info('Рейтинг:', site['rate'])
+        logging.info('Слов в статье:', site['words'])
+        logging.info('Статус:', site['status'].name)
         if site["processing_time"]:
             logging.info(f'Анализ закончен за {site["processing_time"]} сек.')
-        print()
 
 
 async def main():
+    charged_words = await load_dictionaries(
+        path='charged_dict')
+    morph: MorphAnalyzer = MorphAnalyzer()
+    sites_ratings: List[Dict] = []
+    async with aiohttp.ClientSession() as session:
+        async with create_task_group() as tg:
+            for url in TEST_ARTICLES:
+                tg.start_soon(
+                    process_article, session,
+                    morph, charged_words, url,
+                    sites_ratings
+                )
+    output_sites_results(sites_ratings)
+
+
+async def articles_filter_handler(request):
     charged_words = await load_dictionaries(
         path='charged_dict')
     morph: MorphAnalyzer = MorphAnalyzer()

@@ -1,4 +1,5 @@
 import logging
+import pymorphy2
 from aiohttp import web
 
 logger = logging.getLogger('server')
@@ -28,4 +29,7 @@ app.add_routes([web.get('/', handle)])
 if __name__ == '__main__':
     logging.basicConfig(level=logging.ERROR)
     logger.setLevel(logging.DEBUG)
+
+    morph = pymorphy2.MorphAnalyzer()
+
     web.run_app(app)
