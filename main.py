@@ -19,6 +19,7 @@ from pathlib import Path
 from adapters import SANITIZERS
 from adapters.exceptions import ArticleNotFound
 from text_tools import split_by_words, calculate_jaundice_rate
+from utils.timer import elapsed_timer
 
 import logging
 
@@ -84,7 +85,10 @@ async def process_article(
         url: str,
         sites_ratings: List[Dict]):
 
-    yellow_rate = words_count = article_title = None
+    yellow_rate = None
+    words_count = None
+    processing_time = None
+    article_title = None
     try:
         async with timeout(TIMEOUT):
             html: str = await fetch(session, url)
@@ -93,25 +97,27 @@ async def process_article(
 
             sanitizer: function = get_sanitizer(
                 sanitizer_name=extract_sanitizer_name(url=url))
-            sanitized_article: str = sanitizer(html, plaintext=True)
+            with elapsed_timer() as timer:
+                sanitized_article: str = sanitizer(html, plaintext=True)
+            processing_time = timer.duration
 
             article_words: List[str] = split_by_words(
                 morph=morph, text=sanitized_article)
-            
+
             yellow_rate: float = calculate_jaundice_rate(
                 article_words=article_words,
                 charged_words=charged_words)
             words_count = len(article_words)
             status = ProcessingStatus.OK
 
-    except (ClientConnectorError, ClientError, ClientResponseError) as ex:
+    except (ClientConnectorError, ClientError, ClientResponseError):
         article_title: str = 'URL not exist'
         status = ProcessingStatus.FETCH_ERROR
 
-    except ArticleNotFound as ex:
+    except ArticleNotFound:
         status = ProcessingStatus.PARSING_ERROR
 
-    except TimeoutError as ex:
+    except TimeoutError:
         status = ProcessingStatus.TIMEOUT
 
     sites_ratings.append(
@@ -121,6 +127,7 @@ async def process_article(
             'rate': yellow_rate,
             'words': words_count,
             'status': status,
+            'processing_time': processing_time,
         }
     )
 
@@ -132,6 +139,8 @@ def output_sites_results(sites_ratings:  List[Dict]) -> None:
         print('Рейтинг:', site['rate'])
         print('Слов в статье:', site['words'])
         print('Статус:', site['status'].name)
+        print(f'Анализ закончен за {site["processing_time"]} сек.')
+
         print()
 
 

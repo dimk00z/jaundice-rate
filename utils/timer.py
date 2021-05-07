@@ -8,13 +8,13 @@ class Timer:
         self.end = None
 
     @property
-    def timer_result(self):
+    def duration(self):
         if self.end is not None:
-            return self.end - self.start
+            return round(self.end - self.start, 4)
 
 
 @contextmanager
-def timer():
+def elapsed_timer():
     processing_start_time = monotonic()
     process_timer = Timer(processing_start_time)
     try:
