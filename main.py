@@ -99,7 +99,7 @@ async def process_article(
                 sanitizer_name=extract_sanitizer_name(url=url))
             with elapsed_timer() as timer:
                 sanitized_article: str = sanitizer(html, plaintext=True)
-            processing_time = timer.duration
+            processing_time = round(timer.duration, 3)
 
             article_words: List[str] = split_by_words(
                 morph=morph, text=sanitized_article)
@@ -139,8 +139,8 @@ def output_sites_results(sites_ratings:  List[Dict]) -> None:
         print('Рейтинг:', site['rate'])
         print('Слов в статье:', site['words'])
         print('Статус:', site['status'].name)
-        print(f'Анализ закончен за {site["processing_time"]} сек.')
-
+        if site["processing_time"]:
+            logging.info(f'Анализ закончен за {site["processing_time"]} сек.')
         print()
 
 
@@ -161,6 +161,5 @@ async def main():
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.ERROR)
-    # logger.setLevel(logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     run(main)

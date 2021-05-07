@@ -10,7 +10,7 @@ class Timer:
     @property
     def duration(self):
         if self.end is not None:
-            return round(self.end - self.start, 4)
+            return self.end - self.start
 
 
 @contextmanager
