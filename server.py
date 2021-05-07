@@ -1,4 +1,7 @@
+import logging
 from aiohttp import web
+
+logger = logging.getLogger('server')
 
 
 async def handle(request):
@@ -23,4 +26,6 @@ app = web.Application()
 app.add_routes([web.get('/', handle)])
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.ERROR)
+    logger.setLevel(logging.DEBUG)
     web.run_app(app)
