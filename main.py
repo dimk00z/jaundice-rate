@@ -126,7 +126,7 @@ def output_sites_results(sites_ratings:  List[Dict]) -> None:
 
 
 async def main():
-    charged_words = await load_dictionaries(
+    charged_words = load_dictionaries(
         path='charged_dict')
     morph: MorphAnalyzer = MorphAnalyzer()
     sites_ratings: List[Dict] = []
@@ -141,22 +141,34 @@ async def main():
     output_sites_results(sites_ratings)
 
 
-async def articles_filter_handler(request):
-    charged_words = await load_dictionaries(
-        path='charged_dict')
-    morph: MorphAnalyzer = MorphAnalyzer()
+async def articles_filter_handler(morph, charged_words, request):
+    if request.rel_url.query.get('urls') is None:
+        return aiohttp.web.json_response({
+            "error": "no one url requested"
+        }, status=400)
+
+    urls = request.rel_url.query['urls'].split(',')
+
+    if len(urls) > 10:
+        return aiohttp.web.json_response({
+            "error": "too many urls in request, should be 10 or less"
+        }, status=400)
+
     sites_ratings: List[Dict] = []
     async with aiohttp.ClientSession() as session:
         async with create_task_group() as tg:
-            for url in TEST_ARTICLES:
+            for url in urls:
                 tg.start_soon(
                     process_article, session,
                     morph, charged_words, url,
                     sites_ratings
                 )
-    output_sites_results(sites_ratings)
+    print(sites_ratings)
+    return aiohttp.web.Response(text=str(sites_ratings))
+    # return aiohttp.web.json_response(sites_ratings)
+    # output_sites_results(sites_ratings)
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
     run(main)
