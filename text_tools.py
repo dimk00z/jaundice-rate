@@ -1,5 +1,6 @@
 import pymorphy2
 import string
+import asyncio
 
 
 def _clean_word(word):
@@ -9,7 +10,7 @@ def _clean_word(word):
     return word
 
 
-def split_by_words(morph, text):
+async def split_by_words(morph, text):
     """Учитывает знаки пунктуации, регистр и словоформы, выкидывает предлоги."""
     words = []
     for word in text.split():
@@ -17,6 +18,7 @@ def split_by_words(morph, text):
         normalized_word = morph.parse(cleaned_word)[0].normal_form
         if len(normalized_word) > 2 or normalized_word == 'не':
             words.append(normalized_word)
+        await asyncio.sleep(0)
     return words
 
 
@@ -24,10 +26,12 @@ def test_split_by_words():
     # Экземпляры MorphAnalyzer занимают 10-15Мб RAM т.к. загружают в память много данных
     # Старайтесь организовать свой код так, чтоб создавать экземпляр MorphAnalyzer заранее и в единственном числе
     morph = pymorphy2.MorphAnalyzer()
-
-    assert split_by_words(morph, 'Во-первых, он хочет, чтобы') == ['во-первых', 'хотеть', 'чтобы']
-
-    assert split_by_words(morph, '«Удивительно, но это стало началом!»') == ['удивительно', 'это', 'стать', 'начало']
+    words = asyncio.run(split_by_words(morph, 'Во-первых, он хочет, чтобы'))
+    assert words == ['во-первых', 'хотеть', 'чтобы']
+    words = asyncio.run(
+        split_by_words(morph, '«Удивительно, но это стало началом!»')
+    )
+    assert words == ['удивительно', 'это', 'стать', 'начало']
 
 
 def calculate_jaundice_rate(article_words, charged_words):
@@ -36,7 +40,8 @@ def calculate_jaundice_rate(article_words, charged_words):
     if not article_words:
         return 0.0
 
-    found_charged_words = [word for word in article_words if word in set(charged_words)]
+    found_charged_words = [
+        word for word in article_words if word in set(charged_words)]
 
     score = len(found_charged_words) / len(article_words) * 100
 
@@ -45,4 +50,5 @@ def calculate_jaundice_rate(article_words, charged_words):
 
 def test_calculate_jaundice_rate():
     assert -0.01 < calculate_jaundice_rate([], []) < 0.01
-    assert 33.0 < calculate_jaundice_rate(['все', 'аутсайдер', 'побег'], ['аутсайдер', 'банкротство']) < 34.0
+    assert 33.0 < calculate_jaundice_rate(['все', 'аутсайдер', 'побег'], [
+                                          'аутсайдер', 'банкротство']) < 34.0

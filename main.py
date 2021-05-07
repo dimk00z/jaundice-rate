@@ -33,7 +33,7 @@ TEST_ARTICLES = (
     'https://inosmi.ru/politic/20210425/249628769.html',
     'https://dvmn.org/media/filer_public/51/83/51830f54-7ec7-4702-847b-c5790ed3724c/gogol_nikolay_taras_bulba_-_bookscafenet.txt'
 )
-TIMEOUT = 3
+TIMEOUT = 10
 
 
 class ProcessingStatus(Enum):
@@ -96,7 +96,7 @@ async def process_article(
             html: str = await fetch(session, url)
 
             article_title: str = extract_title(html)
-            
+
             domain_name = extract_sanitizer_name(url=url)
             if domain_name == 'dvmn_org':
                 sanitized_article = html
@@ -106,7 +106,7 @@ async def process_article(
                 sanitized_article: str = sanitizer(html, plaintext=True)
 
             with elapsed_timer() as timer:
-                article_words: List[str] = split_by_words(
+                article_words: List[str] = await split_by_words(
                     morph=morph, text=sanitized_article)
             processing_time = round(timer.duration, 3)
 
