@@ -31,6 +31,7 @@ TEST_ARTICLES = (
     'https://inosmi.ru/politic/20210425/249629175.html',
     'https://inosmi.ru/social/20210425/249628917.html',
     'https://inosmi.ru/politic/20210425/249628769.html',
+    'https://dvmn.org/media/filer_public/51/83/51830f54-7ec7-4702-847b-c5790ed3724c/gogol_nikolay_taras_bulba_-_bookscafenet.txt'
 )
 TIMEOUT = 3
 
@@ -45,7 +46,8 @@ class ProcessingStatus(Enum):
 def extract_title(html: str) -> str:
     soup: BeautifulSoup = BeautifulSoup(html, 'html.parser')
     meta_title_tag: element.Tag = soup.find("meta",  {"property": "og:title"})
-    return meta_title_tag["content"]
+    if meta_title_tag:
+        return meta_title_tag["content"]
 
 
 def extract_sanitizer_name(url: str) -> str:
@@ -94,15 +96,19 @@ async def process_article(
             html: str = await fetch(session, url)
 
             article_title: str = extract_title(html)
-
-            sanitizer: function = get_sanitizer(
-                sanitizer_name=extract_sanitizer_name(url=url))
-            with elapsed_timer() as timer:
+            
+            domain_name = extract_sanitizer_name(url=url)
+            if domain_name == 'dvmn_org':
+                sanitized_article = html
+            else:
+                sanitizer: function = get_sanitizer(
+                    sanitizer_name=domain_name)
                 sanitized_article: str = sanitizer(html, plaintext=True)
-            processing_time = round(timer.duration, 3)
 
-            article_words: List[str] = split_by_words(
-                morph=morph, text=sanitized_article)
+            with elapsed_timer() as timer:
+                article_words: List[str] = split_by_words(
+                    morph=morph, text=sanitized_article)
+            processing_time = round(timer.duration, 3)
 
             yellow_rate: float = calculate_jaundice_rate(
                 article_words=article_words,
