@@ -107,7 +107,9 @@ async def process_article(
 
             with elapsed_timer() as timer:
                 article_words: List[str] = await split_by_words(
-                    morph=morph, text=sanitized_article)
+                    morph=morph,
+                    text=sanitized_article,
+                    splitting_timeout=TIMEOUT)
             processing_time = round(timer.duration, 3)
 
             yellow_rate: float = calculate_jaundice_rate(
