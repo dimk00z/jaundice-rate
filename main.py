@@ -116,11 +116,11 @@ async def process_article(
 
 def output_sites_results(sites_ratings:  List[Dict]) -> None:
     for site in sites_ratings:
-        logging.info(F'Url: {site["url"]}')
+        logging.info(f'Url: {site["url"]}')
         logging.info(f'Заголовок статьи:{site["title"]}')
-        logging.info('Рейтинг:', site['rate'])
-        logging.info('Слов в статье:', site['words'])
-        logging.info('Статус:', site['status'].name)
+        logging.info(f'Рейтинг:{site["rate"]}')
+        logging.info(f'Слов в статье:{site["words"]}')
+        logging.info(f'Статус:{site["status"].name}')
         if site["processing_time"]:
             logging.info(f'Анализ закончен за {site["processing_time"]} сек.')
 
