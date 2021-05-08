@@ -1,6 +1,7 @@
 from re import S
 from anyio import create_task_group, run
 from async_timeout import timeout
+import json
 
 import aiohttp
 from aiohttp.client_exceptions import ClientConnectorError, ClientError, ClientResponseError
@@ -29,6 +30,7 @@ TEST_ARTICLES = (
     'https://inosmi.ru/politic/20210425/249628769.html',
     'https://dvmn.org/media/filer_public/51/83/51830f54-7ec7-4702-847b-c5790ed3724c/gogol_nikolay_taras_bulba_-_bookscafenet.txt'
 )
+
 TIMEOUT = 10
 
 
@@ -114,31 +116,34 @@ async def process_article(
     )
 
 
-def output_sites_results(sites_ratings:  List[Dict]) -> None:
+def combine_response(sites_ratings:  List[Dict]) -> None:
+    response = []
     for site in sites_ratings:
-        logging.info(f'Url: {site["url"]}')
-        logging.info(f'Заголовок статьи:{site["title"]}')
-        logging.info(f'Рейтинг:{site["rate"]}')
-        logging.info(f'Слов в статье:{site["words"]}')
-        logging.info(f'Статус:{site["status"].name}')
-        if site["processing_time"]:
-            logging.info(f'Анализ закончен за {site["processing_time"]} сек.')
+        response.append(
+            {
+                'status': site["status"].name,
+                'url': site["url"],
+                'score': site["rate"],
+                'words_count': site["words"],
+
+            }
+        )
+    return response
 
 
-async def main():
-    charged_words = load_dictionaries(
-        path='charged_dict')
-    morph: MorphAnalyzer = MorphAnalyzer()
-    sites_ratings: List[Dict] = []
-    async with aiohttp.ClientSession() as session:
-        async with create_task_group() as tg:
-            for url in TEST_ARTICLES:
-                tg.start_soon(
-                    process_article, session,
-                    morph, charged_words, url,
-                    sites_ratings
-                )
-    output_sites_results(sites_ratings)
+# async def main():
+#     charged_words = load_dictionaries(
+#         path='charged_dict')
+#     morph: MorphAnalyzer = MorphAnalyzer()
+#     sites_ratings: List[Dict] = []
+#     async with aiohttp.ClientSession() as session:
+#         async with create_task_group() as tg:
+#             for url in TEST_ARTICLES:
+#                 tg.start_soon(
+#                     process_article, session,
+#                     morph, charged_words, url,
+#                     sites_ratings
+#                 )
 
 
 async def articles_filter_handler(morph, charged_words, request):
@@ -163,12 +168,12 @@ async def articles_filter_handler(morph, charged_words, request):
                     morph, charged_words, url,
                     sites_ratings
                 )
-    print(sites_ratings)
-    return aiohttp.web.Response(text=str(sites_ratings))
-    # return aiohttp.web.json_response(sites_ratings)
-    # output_sites_results(sites_ratings)
+    response = combine_response(sites_ratings)
+
+    logging.info(f'Response body: {response}')
+    return aiohttp.web.json_response(response)
 
 
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
-    run(main)
+# if __name__ == '__main__':
+#     logging.basicConfig(level=logging.DEBUG)
+#     run(main)

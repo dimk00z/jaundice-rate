@@ -1,9 +1,11 @@
 import logging
 import pymorphy2
-from aiohttp import web
 import functools
+from aiohttp import web
+
 from main import articles_filter_handler
 from utils.utils import load_dictionaries
+
 
 logger = logging.getLogger('server')
 
@@ -43,3 +45,5 @@ if __name__ == '__main__':
     app = web.Application()
     app.add_routes([web.get('/', prepared_articles_filter_handler)])
     web.run_app(app)
+
+# ?urls=https://inosmi.ru/politic/20210425/249628769.html,https://inosmi.ru/politic/20210425/249629175.html,https://inosmi.ru/social/20210425/249628917.html
