@@ -1,8 +1,9 @@
-from anyio import create_task_group, run
+from anyio import create_task_group
 from async_timeout import timeout
 
 import aiohttp
-from aiohttp.client_exceptions import ClientConnectorError, ClientError, ClientResponseError
+from aiohttp.client_exceptions import ClientConnectorError,\
+    ClientError, ClientResponseError
 from asyncio.exceptions import TimeoutError
 from enum import Enum
 
@@ -66,17 +67,13 @@ async def process_article(
             article_title: str = extract_title(html)
 
             domain_name = extract_sanitizer_name(url=url)
-            if skip_sanitizer:
-                sanitized_article: str = html
-            else:
-                sanitizer: function = get_sanitizer(
-                    sanitizer_name=domain_name)
-                sanitized_article: str = sanitizer(html, plaintext=True)
+            article: str = html if skip_sanitizer else get_sanitizer(
+                sanitizer_name=domain_name)(html, plaintext=True)
 
             with elapsed_timer() as timer:
                 article_words: List[str] = await split_by_words(
                     morph=morph,
-                    text=sanitized_article,
+                    text=article,
                     splitting_timeout=TIMEOUT)
             processing_time = round(timer.duration, 3)
 
@@ -151,36 +148,81 @@ async def articles_filter_handler(morph, charged_words, request):
     return aiohttp.web.json_response(response)
 
 
-TEST_ARTICLES = (
-    'https://inosmi_broken.ru/social/20210424/249625353.html',
-    'https://lenta.ru/news/2021/04/26/zemlya/',
-    'https://inosmi.ru/social/20210424/249625353.html',
-    'https://inosmi.ru/social/20210425/249629422.html',
-    'https://inosmi.ru/politic/20210425/249629175.html',
-    'https://inosmi.ru/social/20210425/249628917.html',
-    'https://inosmi.ru/politic/20210425/249628769.html',
-    'https://dvmn.org/media/filer_public/51/83/51830f54-7ec7-4702-847b-c5790ed3724c/gogol_nikolay_taras_bulba_-_bookscafenet.txt'
+@pytest.mark.parametrize(
+    'expected_status_per_url',
+    [
+        {'https://inosmi.ru/social/20210424/249625353.html':
+            (ProcessingStatus.OK,)},
+        {
+            'https://inosmi.ru/social/20210424/249625353.html': (
+                ProcessingStatus.OK,),
+            'https://inosmi.ru/social/20210425/249629422.html': (
+                ProcessingStatus.OK,)
+        },
+        {
+            'https://inosmi_broken.ru/social/20210424/249625353.html': (
+                ProcessingStatus.FETCH_ERROR,
+                ProcessingStatus.TIMEOUT)
+        },
+        {
+            'some_url': (
+                ProcessingStatus.FETCH_ERROR,
+                ProcessingStatus.TIMEOUT),
+            'https://ru.ru': (
+                ProcessingStatus.FETCH_ERROR, ProcessingStatus.TIMEOUT),
+            'https://httpstat.us/500': (ProcessingStatus.FETCH_ERROR, ),
+            'https://httpstat.us/400': (ProcessingStatus.FETCH_ERROR, )
+        },
+        {
+            'https://absent_url.org': (ProcessingStatus.FETCH_ERROR,
+                                       ProcessingStatus.TIMEOUT),
+            'https://inosmi.ru/social/20210424/249625353.html': (
+                ProcessingStatus.OK,),
+            'http://example.com': (ProcessingStatus.PARSING_ERROR,
+                                   ProcessingStatus.TIMEOUT),
+            'https://inosmi.ru/social/20210425/249629422.html': (
+                ProcessingStatus.OK,),
+            'some_url': (ProcessingStatus.FETCH_ERROR,
+                         ProcessingStatus.TIMEOUT),
+        },
+    ],
 )
-# http://172.25.233.215:8080/?urls=https://inosmi.ru/politic/20210425/249628769.html,https://inosmi.ru/politic/20210425/249629175.html,https://inosmi.ru/social/20210425/249628917.html
+@pytest.mark.parametrize('anyio_backend', ['asyncio'])
+async def test_process_article(anyio_backend, expected_status_per_url):
+    url_results = []
+    async with aiohttp.ClientSession() as session:
+        morph = MorphAnalyzer()
+        charged_words = charged_words = load_dictionaries(
+            path='charged_dict')
 
+        async with create_task_group() as task_group:
+            for url in expected_status_per_url:
+                await task_group.spawn(
+                    process_article,
+                    session,
+                    morph,
+                    charged_words,
+                    url,
+                    url_results,
+                )
 
-# async def main():
-#     charged_words = load_dictionaries(
-#         path='charged_dict')
-#     morph: MorphAnalyzer = MorphAnalyzer()
-#     sites_ratings: List[Dict] = []
-#     async with aiohttp.ClientSession() as session:
-#         async with create_task_group() as tg:
-#             for url in TEST_ARTICLES:
-#                 tg.start_soon(
-#                     process_article, session,
-#                     morph, charged_words, url,
-#                     sites_ratings
-#                 )
+    assert len(url_results) == len(expected_status_per_url)
 
-# if __name__ == '__main__':
-#     logging.basicConfig(level=logging.DEBUG)
-#     run(main)
+    for url_result in url_results:
+        assert len(url_result) == 6
+        assert url_result['url'] in expected_status_per_url
+        expected_statuses = expected_status_per_url[url_result['url']]
+        print(url_result['url'], url_result['status'])
+        assert url_result['status'] in expected_statuses
+        if url_result['status'] == ProcessingStatus.OK:
+            assert all([url_result['rate'], url_result['words'],
+                       url_result['processing_time']])
+        else:
+            assert all(
+                [url_result['rate'] is None,
+                 url_result['words'] is None,
+                 url_result['processing_time'] is None]
+            )
 
 
 @pytest.mark.parametrize('anyio_backend', ['asyncio'])
@@ -190,21 +232,21 @@ async def test_too_big_article(anyio_backend):
         morph = MorphAnalyzer()
         charged_words = load_dictionaries(
             path='charged_dict')
-        sites_ratings = []
+        url_results = []
         await process_article(
             session,
             morph,
             charged_words,
             url,
-            sites_ratings,
+            url_results,
             skip_sanitizer=True
         )
-    assert len(sites_ratings) == 1
-    url_processing = sites_ratings[0]
+    assert len(url_results) == 1
+    url_processing = url_results[0]
     assert len(url_processing) == 6
     assert url_processing['url'] == url
     assert url_processing['status'] == ProcessingStatus.TIMEOUT
     assert all(
         [url_processing['rate'] is None, url_processing['words']
-            is None, url_processing['processing_time'] == None]
+            is None, url_processing['processing_time'] is None]
     )

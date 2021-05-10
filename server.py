@@ -43,5 +43,6 @@ if __name__ == '__main__':
         charged_words
     )
     app = web.Application()
-    app.add_routes([web.get('/', prepared_articles_filter_handler)])
+    app.add_routes([web.get('/',
+                            prepared_articles_filter_handler)])
     web.run_app(app)
