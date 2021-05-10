@@ -45,5 +45,3 @@ if __name__ == '__main__':
     app = web.Application()
     app.add_routes([web.get('/', prepared_articles_filter_handler)])
     web.run_app(app)
-
-# ?urls=https://inosmi.ru/politic/20210425/249628769.html,https://inosmi.ru/politic/20210425/249629175.html,https://inosmi.ru/social/20210425/249628917.html

@@ -1,4 +1,5 @@
-class ArticleNotFound(Exception):
+
+class SanitizerNotFound(Exception):
     def __init__(self, sanitizer_name):
         self.message = f'Sanitizer "{sanitizer_name}" does not found'
         super().__init__(self.message)
@@ -7,3 +8,5 @@ class ArticleNotFound(Exception):
         return self.message
 
 
+class ArticleNotFound(Exception):
+    pass

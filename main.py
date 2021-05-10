@@ -1,7 +1,5 @@
-from re import S
 from anyio import create_task_group, run
 from async_timeout import timeout
-import json
 
 import aiohttp
 from aiohttp.client_exceptions import ClientConnectorError, ClientError, ClientResponseError
@@ -13,23 +11,14 @@ from typing import List, Tuple, Dict
 from pymorphy2 import MorphAnalyzer
 
 from adapters import SANITIZERS
-from adapters.exceptions import ArticleNotFound
+from adapters.exceptions import ArticleNotFound, SanitizerNotFound
 from text_tools import split_by_words, calculate_jaundice_rate
 from utils.timer import elapsed_timer
-from utils.utils import extract_sanitizer_name, load_dictionaries, extract_title
+from utils.utils import extract_sanitizer_name, extract_title
 
+import pytest
 import logging
 
-TEST_ARTICLES = (
-    'https://inosmi_broken.ru/social/20210424/249625353.html',
-    'https://lenta.ru/news/2021/04/26/zemlya/',
-    'https://inosmi.ru/social/20210424/249625353.html',
-    'https://inosmi.ru/social/20210425/249629422.html',
-    'https://inosmi.ru/politic/20210425/249629175.html',
-    'https://inosmi.ru/social/20210425/249628917.html',
-    'https://inosmi.ru/politic/20210425/249628769.html',
-    'https://dvmn.org/media/filer_public/51/83/51830f54-7ec7-4702-847b-c5790ed3724c/gogol_nikolay_taras_bulba_-_bookscafenet.txt'
-)
 
 TIMEOUT = 10
 
@@ -52,7 +41,7 @@ async def fetch(
 def get_sanitizer(sanitizer_name: str):
     sanitizer: function = SANITIZERS.get(sanitizer_name)
     if sanitizer is None:
-        raise ArticleNotFound(sanitizer_name)
+        raise SanitizerNotFound(sanitizer_name)
     return sanitizer
 
 
@@ -74,12 +63,12 @@ async def process_article(
             article_title: str = extract_title(html)
 
             domain_name = extract_sanitizer_name(url=url)
-            if domain_name == 'dvmn_org':
-                sanitized_article = html
-            else:
-                sanitizer: function = get_sanitizer(
-                    sanitizer_name=domain_name)
-                sanitized_article: str = sanitizer(html, plaintext=True)
+            # if domain_name == 'dvmn_org':
+            #     sanitized_article = html
+            # else:
+            sanitizer: function = get_sanitizer(
+                sanitizer_name=domain_name)
+            sanitized_article: str = sanitizer(html, plaintext=True)
 
             with elapsed_timer() as timer:
                 article_words: List[str] = await split_by_words(
@@ -98,7 +87,7 @@ async def process_article(
         article_title: str = 'URL not exist'
         status = ProcessingStatus.FETCH_ERROR
 
-    except ArticleNotFound:
+    except (ArticleNotFound, SanitizerNotFound):
         status = ProcessingStatus.PARSING_ERROR
 
     except TimeoutError:
@@ -177,3 +166,15 @@ async def articles_filter_handler(morph, charged_words, request):
 # if __name__ == '__main__':
 #     logging.basicConfig(level=logging.DEBUG)
 #     run(main)
+
+TEST_ARTICLES = (
+    'https://inosmi_broken.ru/social/20210424/249625353.html',
+    'https://lenta.ru/news/2021/04/26/zemlya/',
+    'https://inosmi.ru/social/20210424/249625353.html',
+    'https://inosmi.ru/social/20210425/249629422.html',
+    'https://inosmi.ru/politic/20210425/249629175.html',
+    'https://inosmi.ru/social/20210425/249628917.html',
+    'https://inosmi.ru/politic/20210425/249628769.html',
+    'https://dvmn.org/media/filer_public/51/83/51830f54-7ec7-4702-847b-c5790ed3724c/gogol_nikolay_taras_bulba_-_bookscafenet.txt'
+)
+# http://172.25.233.215:8080/?urls=https://inosmi.ru/politic/20210425/249628769.html,https://inosmi.ru/politic/20210425/249629175.html,https://inosmi.ru/social/20210425/249628917.html

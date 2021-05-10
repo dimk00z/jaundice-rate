@@ -1,5 +1,3 @@
-import aiofiles
-
 from typing import List, Tuple
 from pathlib import Path
 from urllib.parse import urlparse
