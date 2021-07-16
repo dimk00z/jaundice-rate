@@ -19,11 +19,14 @@ from utils.utils import extract_sanitizer_name, extract_title
 import pytest
 from pymorphy2 import MorphAnalyzer
 from utils.utils import load_dictionaries
-
+import functools
+from aiohttp import web
 import logging
 
 
 TIMEOUT = 3
+
+logger = logging.getLogger('server')
 
 
 class ProcessingStatus(Enum):
@@ -146,6 +149,25 @@ async def articles_filter_handler(morph, charged_words, request):
 
     logging.info(f'Response body: {response}')
     return aiohttp.web.json_response(response)
+
+if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG)
+    logger.setLevel(logging.DEBUG)
+
+    morph = MorphAnalyzer()
+
+    charged_words = load_dictionaries(
+        path='charged_dict')
+
+    prepared_articles_filter_handler = functools.partial(
+        articles_filter_handler,
+        morph,
+        charged_words
+    )
+    app = web.Application()
+    app.add_routes([web.get('/',
+                            prepared_articles_filter_handler)])
+    web.run_app(app)
 
 
 @pytest.mark.parametrize(

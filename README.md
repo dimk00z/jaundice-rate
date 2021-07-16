@@ -35,7 +35,7 @@ pip install -r requirements.txt
 # Как запустить
 
 ```python3
-python server.py
+python main.py
 ```
 
 # Как запустить тесты
