@@ -1,7 +1,7 @@
-from typing import List, Tuple
-from pathlib import Path
-from urllib.parse import urlparse
 from bs4 import BeautifulSoup, element
+from urllib.parse import urlparse
+from pathlib import Path
+from typing import List, Tuple
 
 
 def extract_sanitizer_name(url: str) -> str:
