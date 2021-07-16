@@ -1,19 +1,20 @@
 from time import monotonic
 from contextlib import contextmanager
+from dataclasses import dataclass
 
 
+@dataclass
 class Timer:
-    def __init__(self, start) -> None:
-        self.start = start
-        self.end = None
+    start: float
+    end: float = 0
 
     @property
     def duration(self):
-        if self.end is not None:
+        if self.end:
             return self.end - self.start
 
 
-@contextmanager
+@ contextmanager
 def elapsed_timer():
     processing_start_time = monotonic()
     process_timer = Timer(processing_start_time)
