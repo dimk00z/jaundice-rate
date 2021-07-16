@@ -14,7 +14,7 @@ from adapters import SANITIZERS
 from adapters.exceptions import ArticleNotFound, SanitizerNotFound
 from text_tools import split_by_words, calculate_jaundice_rate
 from utils.timer import elapsed_timer
-from utils.utils import extract_sanitizer_name, extract_title
+from utils.utils import extract_sanitizer_name, extract_title, is_url
 
 import pytest
 from pymorphy2 import MorphAnalyzer
@@ -117,7 +117,6 @@ def combine_response(sites_ratings:  List[Dict]) -> None:
                 'url': site["url"],
                 'score': site["rate"],
                 'words_count': site["words"],
-
             }
         )
     return response
@@ -131,6 +130,10 @@ async def articles_filter_handler(morph, charged_words, request):
 
     urls = request.rel_url.query['urls'].split(',')
 
+    if not all(is_url(url) for url in urls):
+        return aiohttp.web.json_response({
+            "error": "should contain urls only"
+        }, status=400)
     if len(urls) > 10:
         return aiohttp.web.json_response({
             "error": "too many urls in request, should be 10 or less"
