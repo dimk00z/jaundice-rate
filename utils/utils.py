@@ -1,7 +1,10 @@
 from bs4 import BeautifulSoup, element
 from urllib.parse import urlparse
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Pattern
+import re
+
+URLS_REGEX = re.compile(r"^https?://\w+", flags=re.IGNORECASE)
 
 
 def extract_sanitizer_name(url: str) -> str:
@@ -24,3 +27,9 @@ def load_dictionaries(path: str = 'charged_dict') -> Tuple[str]:
             file_content: str = file.read()
             dictionary.extend((file_content.strip().split('\n')))
     return tuple(dictionary)
+
+
+def is_url(
+        url: str,
+        regexp: Pattern = URLS_REGEX) -> bool:
+    return bool(regexp.match(url))
