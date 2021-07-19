@@ -125,15 +125,21 @@ def combine_response(sites_ratings:  List[Dict]) -> None:
 async def articles_filter_handler(morph, charged_words, request):
     if request.rel_url.query.get('urls') is None:
         return aiohttp.web.json_response({
-            "error": "no one url requested"
+            "error": "urls parameter is required"
+        }, status=400)
+
+    if not request.rel_url.query.get('urls'):
+        return aiohttp.web.json_response({
+            "error": "given urls parameter is empty"
         }, status=400)
 
     urls = request.rel_url.query['urls'].split(',')
 
     if not all(is_url(url) for url in urls):
         return aiohttp.web.json_response({
-            "error": "should contain urls only"
+            "error": "some(all) given urls are not correct"
         }, status=400)
+
     if len(urls) > 10:
         return aiohttp.web.json_response({
             "error": "too many urls in request, should be 10 or less"
