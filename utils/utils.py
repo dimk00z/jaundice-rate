@@ -32,6 +32,4 @@ def load_dictionaries(path: str = 'charged_dict') -> Tuple[str]:
 def is_url(
         url: str,
         regexp: Pattern = URLS_REGEX) -> bool:
-    if not url or ' ' in url:
-        return False
     return bool(regexp.match(url))
